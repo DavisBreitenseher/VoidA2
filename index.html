@@ -1,0 +1,2261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VoidA2 — Input Detector</title>
+
+  <!-- Google Fonts: Bebas Neue for display, DM Sans for body -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+
+  <style>
+    /* ============================================================
+       CSS CUSTOM PROPERTIES — Single source of truth
+    ============================================================ */
+    :root {
+      --black: #000000;
+      --white: #ffffff;
+      --off-white: #f0f0f0;
+      --gray: #888888;
+      --light-gray: #cccccc;
+      --font-display: 'Bebas Neue', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+      --nav-height: 72px;
+      --ease-elastic: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      --ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    /* ============================================================
+       RESET & BASE
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--black);
+      color: var(--white);
+      font-family: var(--font-body);
+      font-weight: 300;
+      overflow-x: hidden;
+      cursor: none; /* custom cursor */
+    }
+
+    /* ============================================================
+       CUSTOM CURSOR
+    ============================================================ */
+    #cursor-dot {
+      position: fixed;
+      width: 8px; height: 8px;
+      background: var(--white);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      transition: width 0.2s, height 0.2s, background 0.2s;
+      mix-blend-mode: difference;
+    }
+    #cursor-ring {
+      position: fixed;
+      width: 40px; height: 40px;
+      border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(-50%, -50%);
+      transition: width 0.35s var(--ease-smooth), height 0.35s var(--ease-smooth), border-color 0.2s;
+      mix-blend-mode: difference;
+    }
+    body:has(a:hover) #cursor-ring,
+    body:has(button:hover) #cursor-ring {
+      width: 60px; height: 60px;
+      border-color: var(--white);
+    }
+
+    /* ============================================================
+       SVG FILTER DEFINITIONS (for slime distortion)
+    ============================================================ */
+    #svg-filters { position: absolute; width: 0; height: 0; }
+
+    /* ============================================================
+       NAVIGATION
+    ============================================================ */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--nav-height);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      z-index: 100;
+      mix-blend-mode: difference;
+    }
+    nav::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 48px; right: 48px;
+      height: 1px;
+      background: rgba(255,255,255,0.12);
+    }
+    .nav-logo {
+      font-family: var(--font-display);
+      font-size: 28px;
+      letter-spacing: 0.1em;
+      color: var(--white);
+      text-decoration: none;
+    }
+    .nav-links {
+      display: flex;
+      gap: 40px;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--white);
+      text-decoration: none;
+      position: relative;
+      opacity: 0.7;
+      transition: opacity 0.3s;
+    }
+    .nav-links a::after {
+      content: '';
+      position: absolute;
+      bottom: -3px; left: 0;
+      width: 0; height: 1px;
+      background: var(--white);
+      transition: width 0.4s var(--ease-smooth);
+    }
+    .nav-links a:hover { opacity: 1; }
+    .nav-links a:hover::after { width: 100%; }
+    .nav-cta {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--black);
+      background: var(--white);
+      padding: 10px 24px;
+      border: none;
+      cursor: none;
+      transition: transform 0.3s var(--ease-elastic), box-shadow 0.3s;
+    }
+    .nav-cta:hover {
+      transform: scale(1.06);
+      box-shadow: 0 0 30px rgba(255,255,255,0.3);
+    }
+
+    /* ============================================================
+       HERO SECTION
+    ============================================================ */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: var(--nav-height) 24px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Subtle animated grid background */
+    #hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 80px 80px;
+      animation: gridShift 20s linear infinite;
+    }
+    @keyframes gridShift {
+      from { background-position: 0 0; }
+      to   { background-position: 80px 80px; }
+    }
+
+    .hero-eyebrow {
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--gray);
+      margin-bottom: 24px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.8s var(--ease-smooth) 0.3s forwards;
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: clamp(80px, 14vw, 200px);
+      line-height: 0.9;
+      letter-spacing: -0.01em;
+      color: var(--white);
+      position: relative;
+      z-index: 2;
+      opacity: 0;
+      transform: translateY(40px);
+      animation: fadeUp 1s var(--ease-smooth) 0.5s forwards;
+    }
+
+    /* Gloss highlight on title */
+    .hero-title span {
+      position: relative;
+      display: inline-block;
+    }
+    .hero-title span::after {
+      content: attr(data-text);
+      position: absolute;
+      top: 0; left: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      pointer-events: none;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(15px, 2vw, 20px);
+      font-weight: 300;
+      color: var(--gray);
+      max-width: 480px;
+      line-height: 1.7;
+      margin-top: 28px;
+      opacity: 0;
+      transform: translateY(30px);
+      animation: fadeUp 0.9s var(--ease-smooth) 0.8s forwards;
+    }
+
+    .hero-cta-row {
+      display: flex;
+      gap: 16px;
+      margin-top: 52px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.8s var(--ease-smooth) 1.1s forwards;
+    }
+
+    .btn-primary {
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--black);
+      background: var(--white);
+      border: none;
+      padding: 18px 44px;
+      cursor: none;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.3s var(--ease-elastic), box-shadow 0.4s;
+    }
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 40%, rgba(0,0,0,0.06) 100%);
+      pointer-events: none;
+    }
+    .btn-primary:hover {
+      transform: scale(1.04) translateY(-2px);
+      box-shadow: 0 12px 40px rgba(255,255,255,0.2);
+    }
+
+    .btn-secondary {
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--white);
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.3);
+      padding: 18px 44px;
+      cursor: none;
+      transition: border-color 0.3s, transform 0.3s var(--ease-elastic), background 0.3s;
+    }
+    .btn-secondary:hover {
+      border-color: var(--white);
+      background: rgba(255,255,255,0.05);
+      transform: scale(1.04) translateY(-2px);
+    }
+
+    /* Scroll indicator */
+    .scroll-hint {
+      position: absolute;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      opacity: 0;
+      animation: fadeIn 1s ease 2s forwards;
+    }
+    .scroll-hint span {
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+    .scroll-line {
+      width: 1px;
+      height: 48px;
+      background: linear-gradient(to bottom, var(--gray), transparent);
+      animation: scrollPulse 2s ease-in-out infinite;
+    }
+    @keyframes scrollPulse {
+      0%, 100% { opacity: 0.4; transform: scaleY(1); }
+      50% { opacity: 1; transform: scaleY(1.2); }
+    }
+
+    /* ============================================================
+       SLIME CANVAS — full-page overlay
+    ============================================================ */
+    #slime-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 50;
+    }
+
+    /* ============================================================
+       SECTION SHARED STYLES
+    ============================================================ */
+    section { position: relative; overflow: hidden; }
+
+    .section-label {
+      font-size: 11px;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--gray);
+      margin-bottom: 20px;
+    }
+
+    .section-heading {
+      font-family: var(--font-display);
+      font-size: clamp(44px, 7vw, 96px);
+      line-height: 1;
+      letter-spacing: 0.02em;
+    }
+
+    /* Scroll-reveal base state */
+    .reveal {
+      opacity: 0;
+      transform: translateY(50px);
+      transition: opacity 0.8s var(--ease-smooth), transform 0.8s var(--ease-smooth);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+
+    /* ============================================================
+       MARQUEE STRIP
+    ============================================================ */
+    .marquee-strip {
+      border-top: 1px solid rgba(255,255,255,0.08);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+      padding: 18px 0;
+      white-space: nowrap;
+      background: rgba(255,255,255,0.02);
+    }
+    .marquee-inner {
+      display: inline-block;
+      animation: marquee 18s linear infinite;
+    }
+    .marquee-inner span {
+      font-family: var(--font-display);
+      font-size: 22px;
+      letter-spacing: 0.18em;
+      color: rgba(255,255,255,0.18);
+      padding: 0 48px;
+    }
+    .marquee-inner span.accent {
+      color: rgba(255,255,255,0.55);
+    }
+    @keyframes marquee {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ============================================================
+       WORK / CARDS SECTION
+    ============================================================ */
+    #work {
+      padding: 140px 48px;
+    }
+    .work-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 72px;
+    }
+    .work-header p {
+      max-width: 340px;
+      font-size: 16px;
+      color: var(--gray);
+      line-height: 1.8;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+
+    .card {
+      position: relative;
+      aspect-ratio: 3/4;
+      background: #0a0a0a;
+      overflow: hidden;
+      cursor: none;
+    }
+
+    /* Card background pattern */
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 30% 20%, rgba(255,255,255,0.04) 0%, transparent 60%);
+      z-index: 0;
+    }
+
+    .card-inner {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 32px;
+      z-index: 2;
+    }
+
+    .card-number {
+      position: absolute;
+      top: 24px; right: 28px;
+      font-family: var(--font-display);
+      font-size: 14px;
+      letter-spacing: 0.2em;
+      color: rgba(255,255,255,0.2);
+    }
+
+    .card-icon {
+      width: 48px; height: 48px;
+      border: 1px solid rgba(255,255,255,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      transition: border-color 0.4s, transform 0.4s var(--ease-elastic);
+    }
+    .card-icon svg { width: 20px; height: 20px; stroke: rgba(255,255,255,0.5); fill: none; }
+
+    .card-title {
+      font-family: var(--font-display);
+      font-size: clamp(28px, 3vw, 40px);
+      letter-spacing: 0.04em;
+      line-height: 1.1;
+      margin-bottom: 12px;
+      transition: color 0.3s;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--gray);
+      line-height: 1.7;
+      max-width: 260px;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.4s var(--ease-smooth), transform 0.4s var(--ease-smooth);
+    }
+
+    .card-arrow {
+      position: absolute;
+      bottom: 32px; right: 28px;
+      width: 40px; height: 40px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: opacity 0.35s, transform 0.35s var(--ease-elastic), background 0.3s;
+    }
+    .card-arrow svg { width: 14px; height: 14px; stroke: var(--white); fill: none; }
+
+    /* Card border glow line */
+    .card-glow {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.6s var(--ease-smooth);
+    }
+
+    /* Slime blob that drips on card hover */
+    .card-slime {
+      position: absolute;
+      top: -30px; left: 50%;
+      transform: translateX(-50%) scaleY(0);
+      transform-origin: top center;
+      width: 60px; height: 80px;
+      background: var(--white);
+      border-radius: 0 0 50% 50%;
+      filter: blur(1px);
+      opacity: 0;
+      transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+      z-index: 3;
+    }
+
+    /* Hover state */
+    .card:hover .card-slime {
+      transform: translateX(-50%) scaleY(1);
+      opacity: 0.07;
+    }
+    .card:hover .card-desc {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .card:hover .card-arrow {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .card:hover .card-glow { transform: scaleX(1); }
+    .card:hover .card-icon {
+      border-color: rgba(255,255,255,0.4);
+      transform: rotate(15deg) scale(1.1);
+    }
+
+    /* Card large span */
+    .card.wide { grid-column: span 2; }
+    .card.wide .card-inner { flex-direction: row; align-items: flex-end; gap: 48px; }
+    .card.wide .card-desc { opacity: 0.7; transform: none; max-width: 200px; }
+
+    /* ============================================================
+       STATS SECTION
+    ============================================================ */
+    #stats {
+      padding: 120px 48px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      margin-top: 64px;
+    }
+
+    .stat-box {
+      padding: 48px 36px;
+      border: 1px solid rgba(255,255,255,0.07);
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.4s;
+    }
+    .stat-box::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0;
+      width: 100%; height: 0;
+      background: rgba(255,255,255,0.03);
+      transition: height 0.5s var(--ease-smooth);
+    }
+    .stat-box:hover { border-color: rgba(255,255,255,0.25); }
+    .stat-box:hover::after { height: 100%; }
+
+    .stat-number {
+      font-family: var(--font-display);
+      font-size: clamp(48px, 6vw, 80px);
+      line-height: 1;
+      letter-spacing: -0.02em;
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+
+    /* ============================================================
+       PHILOSOPHY / TEXT SECTION
+    ============================================================ */
+    #philosophy {
+      padding: 160px 48px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .philosophy-left .section-heading {
+      margin-bottom: 0;
+    }
+    /* Split line underline effect */
+    .philosophy-left .section-heading .underline-word {
+      position: relative;
+      display: inline-block;
+    }
+    .philosophy-left .section-heading .underline-word::after {
+      content: '';
+      position: absolute;
+      bottom: -6px; left: 0;
+      width: 100%; height: 3px;
+      background: var(--white);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.6s var(--ease-smooth);
+    }
+    #philosophy.visible .underline-word::after { transform: scaleX(1); }
+
+    .philosophy-right p {
+      font-size: 17px;
+      line-height: 1.9;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 28px;
+    }
+    .philosophy-right p strong {
+      color: var(--white);
+      font-weight: 500;
+    }
+
+    .philosophy-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 36px;
+    }
+    .tag {
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 8px 18px;
+      transition: color 0.3s, border-color 0.3s, background 0.3s;
+      cursor: none;
+    }
+    .tag:hover {
+      color: var(--white);
+      border-color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.05);
+    }
+
+    /* ============================================================
+       FOOTER
+    ============================================================ */
+    footer {
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding: 32px 48px;
+    }
+
+    .footer-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 72px;
+    }
+
+    .footer-brand .logo {
+      font-family: var(--font-display);
+      font-size: 44px;
+      letter-spacing: 0.08em;
+      display: block;
+      margin-bottom: 16px;
+    }
+    .footer-brand p {
+      font-size: 14px;
+      color: var(--gray);
+      max-width: 260px;
+      line-height: 1.7;
+    }
+
+    .footer-links-col h4 {
+      font-size: 11px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--gray);
+      margin-bottom: 24px;
+    }
+    .footer-links-col ul { list-style: none; }
+    .footer-links-col ul li { margin-bottom: 12px; }
+    .footer-links-col ul a {
+      font-size: 14px;
+      color: rgba(255,255,255,0.5);
+      text-decoration: none;
+      transition: color 0.3s;
+    }
+    .footer-links-col ul a:hover { color: var(--white); }
+
+    .footer-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 32px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .footer-bottom p {
+      font-size: 12px;
+      color: rgba(255,255,255,0.25);
+      letter-spacing: 0.05em;
+    }
+    .footer-socials {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-socials a {
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      text-decoration: none;
+      transition: color 0.3s;
+      cursor: none;
+    }
+    .footer-socials a:hover { color: var(--white); }
+
+    /* ============================================================
+       KEYFRAMES
+    ============================================================ */
+    @keyframes fadeUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    /* ============================================================
+       PAGE LOAD OVERLAY
+    ============================================================ */
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: var(--black);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.8s ease 0.3s, visibility 0.8s ease 0.3s;
+    }
+    #loader.hide { opacity: 0; visibility: hidden; }
+
+    .loader-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+    .loader-word {
+      font-family: var(--font-display);
+      font-size: 64px;
+      letter-spacing: 0.2em;
+      overflow: hidden;
+    }
+    .loader-word span {
+      display: inline-block;
+      animation: loaderChar 1s var(--ease-smooth) forwards;
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    @keyframes loaderChar {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .loader-bar {
+      width: 120px; height: 1px;
+      background: rgba(255,255,255,0.1);
+      position: relative;
+      overflow: hidden;
+    }
+    .loader-bar::after {
+      content: '';
+      position: absolute;
+      left: -100%; top: 0;
+      width: 100%; height: 100%;
+      background: var(--white);
+      animation: loaderBar 1.2s var(--ease-smooth) 0.4s forwards;
+    }
+    @keyframes loaderBar {
+      to { left: 100%; }
+    }
+
+    /* ============================================================
+       INPUT DETECTOR SECTION  — new addition
+    ============================================================ */
+    #input-detector {
+      padding: 140px 48px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .input-detector-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 72px;
+    }
+    .input-detector-header p {
+      max-width: 340px;
+      font-size: 16px;
+      color: var(--gray);
+      line-height: 1.8;
+    }
+
+    /* Two-column panel grid */
+    .input-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+    }
+
+    /* Base panel — mirrors .card / .stat-box feel */
+    .input-panel {
+      background: #0a0a0a;
+      border: 1px solid rgba(255,255,255,0.07);
+      padding: 40px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.4s;
+    }
+    .input-panel:hover { border-color: rgba(255,255,255,0.22); }
+
+    /* Glowing top line (same as .card-glow) */
+    .input-panel::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.6s var(--ease-smooth);
+    }
+    .input-panel:hover::before { transform: scaleX(1); }
+
+    /* Slime drip element — same pattern as .card-slime */
+    .input-panel .panel-slime {
+      position: absolute;
+      top: -30px; left: 50%;
+      transform: translateX(-50%) scaleY(0);
+      transform-origin: top center;
+      width: 60px; height: 80px;
+      background: var(--white);
+      border-radius: 0 0 50% 50%;
+      filter: blur(1px);
+      opacity: 0;
+      transition: transform 0.6s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s;
+      z-index: 3;
+      pointer-events: none;
+    }
+    .input-panel:hover .panel-slime {
+      transform: translateX(-50%) scaleY(1);
+      opacity: 0.06;
+    }
+
+    .panel-label {
+      font-size: 11px;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--gray);
+      margin-bottom: 8px;
+    }
+
+    .panel-title {
+      font-family: var(--font-display);
+      font-size: clamp(32px, 4vw, 52px);
+      letter-spacing: 0.04em;
+      line-height: 1;
+      margin-bottom: 32px;
+    }
+
+    /* ---- Status badge ---- */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--gray);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 7px 16px;
+      margin-bottom: 28px;
+      transition: border-color 0.3s, color 0.3s;
+    }
+    .status-badge.active {
+      color: var(--white);
+      border-color: rgba(255,255,255,0.4);
+    }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .status-badge.active .status-dot {
+      background: var(--white);
+      box-shadow: 0 0 8px rgba(255,255,255,0.8);
+      animation: statusPulse 1.8s ease-in-out infinite;
+    }
+    @keyframes statusPulse {
+      0%, 100% { box-shadow: 0 0 6px rgba(255,255,255,0.6); }
+      50%       { box-shadow: 0 0 14px rgba(255,255,255,1); }
+    }
+
+    /* ---- Controller: button layout ---- */
+    .controller-name {
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.1em;
+      margin-bottom: 28px;
+      min-height: 18px;
+    }
+
+    .gp-section-title {
+      font-size: 10px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 14px;
+    }
+
+    /* ---- Outer controller layout wrapper ---- */
+    .gp-buttons-grid {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+      width: 100%;
+    }
+
+    /* Triggers + bumpers row — spans full width */
+    .gp-btn-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 8px;
+    }
+
+    /* Shoulder pair: LT+LB stacked left, RT+RB stacked right */
+    .gp-shoulder-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Main body row: dpad | center | face — all same visual weight */
+    .gp-body-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      width: 100%;
+    }
+
+    /* Base button styles */
+    .gp-btn {
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.03);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      letter-spacing: 0.06em;
+      color: rgba(255,255,255,0.3);
+      transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, color 0.12s;
+      position: relative;
+      font-family: var(--font-display);
+      user-select: none;
+    }
+    .gp-btn.pressed {
+      background: var(--white);
+      border-color: var(--white);
+      color: var(--black);
+      box-shadow: 0 0 16px rgba(255,255,255,0.5);
+    }
+
+    /* Trigger — wide arched top shape */
+    .gp-btn.trigger {
+      width: 80px;
+      height: 32px;
+      border-radius: 8px 8px 3px 3px;
+      border-bottom-width: 3px;
+      font-size: 10px;
+    }
+    /* Bumper — slightly flatter than trigger */
+    .gp-btn.bumper {
+      width: 72px;
+      height: 24px;
+      border-radius: 4px 4px 2px 2px;
+      font-size: 9px;
+    }
+
+    /* Face buttons — circles, same 140px footprint as joystick via diamond grid */
+    .gp-btn.face {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      font-size: 13px;
+    }
+
+    /* D-pad cross: 3×3 grid, corners transparent */
+    .gp-dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 40px);
+      grid-template-rows: repeat(3, 40px);
+      gap: 3px;
+    }
+    .gp-btn.dpad {
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      font-size: 14px;
+      padding: 0;
+    }
+    .gp-dpad-empty {
+      width: 40px;
+      height: 40px;
+      background: transparent;
+    }
+    /* tiny circle center of dpad */
+    .gp-dpad-center {
+      width: 40px;
+      height: 40px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 50%;
+    }
+
+    /* Face button diamond: 3×3 grid, corners transparent, same 40px cells */
+    .gp-face-diamond {
+      display: grid;
+      grid-template-columns: repeat(3, 40px);
+      grid-template-rows: repeat(3, 40px);
+      gap: 3px;
+    }
+    .gp-face-empty {
+      width: 40px;
+      height: 40px;
+    }
+
+    /* Center buttons cluster — SEL / STA / L3 / R3 */
+    .gp-center-cluster {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .gp-btn.small {
+      width: 36px;
+      height: 22px;
+      border-radius: 11px;
+      font-size: 7px;
+      letter-spacing: 0.04em;
+    }
+    .gp-btn.stick-press {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      font-size: 7px;
+    }
+    .gp-center-row {
+      display: flex;
+      gap: 6px;
+    }
+    .gp-spacer { flex: 1; }
+
+    /* Joystick display — bigger, centered */
+    .gp-sticks {
+      display: flex;
+      justify-content: center;
+      gap: 36px;
+      margin-bottom: 28px;
+    }
+
+    .gp-stick-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .gp-stick-label {
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+    }
+
+    /* Joystick circle — enlarged from 80px to 140px */
+    .gp-stick-visual {
+      width: 140px; height: 140px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      position: relative;
+      background: radial-gradient(circle at center,
+        rgba(255,255,255,0.04) 0%,
+        rgba(255,255,255,0.01) 60%,
+        transparent 100%);
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.6), 0 0 0 4px rgba(255,255,255,0.04);
+    }
+    /* crosshairs */
+    .gp-stick-visual::before,
+    .gp-stick-visual::after {
+      content: '';
+      position: absolute;
+      background: rgba(255,255,255,0.07);
+    }
+    .gp-stick-visual::before { width: 1px; height: 100%; left: 50%; top: 0; }
+    .gp-stick-visual::after  { width: 100%; height: 1px; top: 50%; left: 0; }
+
+    /* Stick dot — bigger knob with 3D sheen */
+    .gp-stick-dot {
+      position: absolute;
+      width: 28px; height: 28px;
+      background: radial-gradient(circle at 35% 30%,
+        rgba(255,255,255,0.9) 0%,
+        rgba(200,200,200,0.7) 40%,
+        rgba(120,120,120,0.5) 100%);
+      border-radius: 50%;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      transition: top 0.05s, left 0.05s;
+      box-shadow: 0 0 10px rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.4);
+    }
+
+    .gp-stick-values {
+      font-size: 10px;
+      color: rgba(255,255,255,0.3);
+      font-family: 'DM Sans', monospace;
+      letter-spacing: 0.05em;
+    }
+
+    /* ---- Keyboard section ---- */
+    .kb-last-key {
+      font-family: var(--font-display);
+      font-size: clamp(48px, 6vw, 80px);
+      letter-spacing: 0.06em;
+      line-height: 1;
+      min-height: 80px;
+      margin-bottom: 8px;
+      transition: text-shadow 0.15s;
+    }
+    .kb-last-key.pulse {
+      text-shadow: 0 0 30px rgba(255,255,255,0.8), 0 0 60px rgba(255,255,255,0.3);
+      animation: keyFlash 0.35s var(--ease-smooth) forwards;
+    }
+    @keyframes keyFlash {
+      0%   { text-shadow: 0 0 40px rgba(255,255,255,1), 0 0 80px rgba(255,255,255,0.5); }
+      100% { text-shadow: none; }
+    }
+
+    .kb-sublabel {
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      margin-bottom: 28px;
+    }
+
+    .kb-active-keys-title {
+      font-size: 10px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 12px;
+    }
+
+    .kb-active-keys {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 38px;
+      margin-bottom: 28px;
+    }
+
+    .kb-key-chip {
+      font-family: var(--font-display);
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      color: var(--black);
+      background: var(--white);
+      padding: 5px 12px;
+      animation: chipIn 0.18s var(--ease-elastic) forwards;
+      box-shadow: 0 0 12px rgba(255,255,255,0.3);
+    }
+    @keyframes chipIn {
+      from { opacity: 0; transform: scale(0.7) translateY(6px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* ---- Mouse section ---- */
+    .mouse-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      margin-bottom: 28px;
+    }
+
+    .mouse-stat {
+      border: 1px solid rgba(255,255,255,0.07);
+      padding: 20px 24px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+    }
+    .mouse-stat:hover { border-color: rgba(255,255,255,0.22); }
+
+    .mouse-stat-label {
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 8px;
+    }
+
+    .mouse-stat-value {
+      font-family: var(--font-display);
+      font-size: clamp(22px, 3vw, 34px);
+      letter-spacing: 0.04em;
+      line-height: 1;
+      transition: color 0.1s;
+    }
+
+    .mouse-btn-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .mouse-btn-indicator {
+      flex: 1;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 12px 0;
+      text-align: center;
+      font-size: 10px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.25);
+      transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
+    }
+    .mouse-btn-indicator.active {
+      background: var(--white);
+      border-color: var(--white);
+      color: var(--black);
+      box-shadow: 0 0 16px rgba(255,255,255,0.4);
+    }
+
+    /* Mini slime pulse on click indicator */
+    .click-pulse {
+      display: inline-block;
+      width: 8px; height: 8px;
+      background: var(--white);
+      border-radius: 50%;
+      margin-left: 8px;
+      opacity: 0;
+      transform: scale(0);
+    }
+    .click-pulse.fire {
+      animation: clickPulseAnim 0.5s var(--ease-smooth) forwards;
+    }
+    @keyframes clickPulseAnim {
+      0%   { opacity: 1; transform: scale(0); }
+      50%  { opacity: 1; transform: scale(1.8); box-shadow: 0 0 20px rgba(255,255,255,0.8); }
+      100% { opacity: 0; transform: scale(2.5); }
+    }
+
+    /* Speed bar */
+    .speed-bar-wrap {
+      margin-top: 4px;
+    }
+    .speed-bar-label {
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 8px;
+    }
+    .speed-bar-track {
+      width: 100%;
+      height: 2px;
+      background: rgba(255,255,255,0.07);
+      position: relative;
+    }
+    .speed-bar-fill {
+      height: 100%;
+      background: var(--white);
+      width: 0%;
+      transition: width 0.1s linear;
+      box-shadow: 0 0 8px rgba(255,255,255,0.6);
+    }
+
+    /* ============================================================
+       RESPONSIVE
+    ============================================================ */
+    @media (max-width: 900px) {
+      nav { padding: 0 24px; }
+      nav::after { left: 24px; right: 24px; }
+      .nav-links { display: none; }
+
+      #hero { padding-top: calc(var(--nav-height) + 20px); }
+
+      #work { padding: 80px 24px; }
+      .work-header { flex-direction: column; gap: 20px; align-items: flex-start; }
+      .cards-grid { grid-template-columns: 1fr; gap: 2px; }
+      .card.wide { grid-column: span 1; }
+      .card.wide .card-inner { flex-direction: column; gap: 20px; }
+
+      .input-panels { grid-template-columns: 1fr; }
+      .gp-buttons-grid { grid-template-columns: repeat(6, 1fr); }
+      #input-detector { padding: 80px 24px; }
+      .input-detector-header { flex-direction: column; gap: 20px; align-items: flex-start; }
+
+      #philosophy { grid-template-columns: 1fr; gap: 48px; padding: 80px 24px; }
+
+      #stats { padding: 80px 24px; }
+
+      footer { padding: 48px 24px 32px; }
+      .footer-top { flex-direction: column; gap: 48px; }
+      .footer-bottom { flex-direction: column; gap: 16px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       LOADER
+  ============================================================ -->
+  <div id="loader">
+    <div class="loader-inner">
+      <div class="loader-word">
+        <!-- Each letter animates in with a delay -->
+        <span style="animation-delay:0.0s">V</span>
+        <span style="animation-delay:0.06s">O</span>
+        <span style="animation-delay:0.12s">I</span>
+        <span style="animation-delay:0.18s">D</span>
+        <span style="animation-delay:0.24s">A</span>
+        <span style="animation-delay:0.30s">2</span>
+      </div>
+      <div class="loader-bar"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SVG FILTERS — Slime gooey effect via feGaussianBlur + feColorMatrix
+  ============================================================ -->
+  <svg id="svg-filters" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- Gooey filter: blur + threshold = merges blobs -->
+      <filter id="goo">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur"/>
+        <feColorMatrix in="blur" mode="matrix"
+          values="1 0 0 0 0
+                  0 1 0 0 0
+                  0 0 1 0 0
+                  0 0 0 28 -10" result="goo"/>
+        <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+      </filter>
+
+      <!-- Slime drip filter — stronger threshold for drips -->
+      <filter id="slime-drip" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>
+        <feColorMatrix in="blur" mode="matrix"
+          values="1 0 0 0 0
+                  0 1 0 0 0
+                  0 0 1 0 0
+                  0 0 0 36 -14" result="goo"/>
+        <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+      </filter>
+
+      <!-- Gloss / specular highlight filter -->
+      <filter id="gloss">
+        <feGaussianBlur stdDeviation="4"/>
+        <feComposite in2="SourceGraphic"/>
+      </filter>
+    </defs>
+  </svg>
+
+  <!-- ============================================================
+       CUSTOM CURSOR
+  ============================================================ -->
+  <div id="cursor-dot"></div>
+  <div id="cursor-ring"></div>
+
+  <!-- ============================================================
+       CANVAS — Slime rendering
+  ============================================================ -->
+  <canvas id="slime-canvas"></canvas>
+
+  <!-- ============================================================
+       NAVIGATION
+  ============================================================ -->
+  <nav>
+    <a href="#" class="nav-logo">VoidA2</a>
+    <ul class="nav-links">
+      <li><a href="#input-detector">Input Detector</a></li>
+    </ul>
+  </nav>
+
+
+  <!-- ============================================================
+       MARQUEE STRIP
+  ============================================================ -->
+  <div class="marquee-strip">
+    <div class="marquee-inner">
+      <span>Motion Design</span>
+      <span class="accent">✦</span>
+      <span>Interactive</span>
+      <span class="accent">✦</span>
+      <span>Branding</span>
+      <span class="accent">✦</span>
+      <span>Web Experience</span>
+      <span class="accent">✦</span>
+      <span>Creative Direction</span>
+      <span class="accent">✦</span>
+      <span>Art Direction</span>
+      <span class="accent">✦</span>
+      <!-- duplicate for seamless loop -->
+      <span>Motion Design</span>
+      <span class="accent">✦</span>
+      <span>Interactive</span>
+      <span class="accent">✦</span>
+      <span>Branding</span>
+      <span class="accent">✦</span>
+      <span>Web Experience</span>
+      <span class="accent">✦</span>
+      <span>Creative Direction</span>
+      <span class="accent">✦</span>
+      <span>Art Direction</span>
+      <span class="accent">✦</span>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       INPUT DETECTOR SECTION — new addition
+  ============================================================ -->
+  <section id="input-detector">
+    <div class="input-detector-header">
+      <div>
+        <p class="section-label reveal">Live System</p>
+        <h2 class="section-heading reveal reveal-delay-1">INPUT<br/>DETECTOR</h2>
+      </div>
+      <p class="reveal reveal-delay-2">
+        Real-time monitoring of every input signal — gamepad, keyboard,
+        and mouse — rendered in the VoidA2 aesthetic.
+      </p>
+    </div>
+
+    <div class="input-panels">
+
+      <!-- ===================== PANEL A: CONTROLLER ===================== -->
+      <div class="input-panel reveal" id="panel-controller">
+        <div class="panel-slime"></div>
+
+        <p class="panel-label">Panel A</p>
+        <h3 class="panel-title">CONTROLLER</h3>
+
+        <!-- Connection status badge -->
+        <div class="status-badge" id="gp-status-badge">
+          <span class="status-dot"></span>
+          <span id="gp-status-text">Not Connected</span>
+        </div>
+
+        <!-- Controller name -->
+        <p class="controller-name" id="gp-name">Connect a gamepad and press any button</p>
+
+        <!-- Buttons grid (16 standard buttons) -->
+        <p class="gp-section-title">Buttons</p>
+        <div class="gp-buttons-grid" id="gp-buttons-grid">
+          <!-- Buttons injected by JS -->
+        </div>
+
+        <!-- Joystick visuals -->
+        <p class="gp-section-title">Analog Sticks</p>
+        <div class="gp-sticks">
+          <div class="gp-stick-wrap">
+            <span class="gp-stick-label">Left Stick</span>
+            <div class="gp-stick-visual" id="gp-stick-left">
+              <div class="gp-stick-dot" id="gp-dot-left"></div>
+            </div>
+            <span class="gp-stick-values" id="gp-vals-left">X: 0.00 · Y: 0.00</span>
+          </div>
+          <div class="gp-stick-wrap">
+            <span class="gp-stick-label">Right Stick</span>
+            <div class="gp-stick-visual" id="gp-stick-right">
+              <div class="gp-stick-dot" id="gp-dot-right"></div>
+            </div>
+            <span class="gp-stick-values" id="gp-vals-right">X: 0.00 · Y: 0.00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== PANEL B: KEYBOARD + MOUSE ===================== -->
+      <div class="input-panel reveal reveal-delay-1" id="panel-kb-mouse">
+        <div class="panel-slime"></div>
+
+        <p class="panel-label">Panel B</p>
+        <h3 class="panel-title">KEYBOARD<br/>&amp; MOUSE</h3>
+
+        <!-- Last key pressed -->
+        <div class="kb-last-key" id="kb-last-key">—</div>
+        <p class="kb-sublabel">Last key pressed</p>
+
+        <!-- Currently held keys -->
+        <p class="kb-active-keys-title">Currently held</p>
+        <div class="kb-active-keys" id="kb-active-keys"></div>
+
+        <!-- Mouse stats grid -->
+        <div class="mouse-grid">
+          <div class="mouse-stat">
+            <p class="mouse-stat-label">Position X</p>
+            <div class="mouse-stat-value" id="mouse-x">0</div>
+          </div>
+          <div class="mouse-stat">
+            <p class="mouse-stat-label">Position Y</p>
+            <div class="mouse-stat-value" id="mouse-y">0</div>
+          </div>
+        </div>
+
+        <!-- Click indicators -->
+        <div class="mouse-btn-row">
+          <div class="mouse-btn-indicator" id="mouse-left-btn">
+            Left Click <span class="click-pulse" id="click-pulse-left"></span>
+          </div>
+          <div class="mouse-btn-indicator" id="mouse-middle-btn">Middle</div>
+          <div class="mouse-btn-indicator" id="mouse-right-btn">
+            Right Click <span class="click-pulse" id="click-pulse-right"></span>
+          </div>
+        </div>
+
+        <!-- Movement speed bar -->
+        <div class="speed-bar-wrap">
+          <p class="speed-bar-label">Cursor Speed</p>
+          <div class="speed-bar-track">
+            <div class="speed-bar-fill" id="mouse-speed-bar"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.input-panels -->
+  </section>
+  <!-- ============================================================
+       MINIMAL FOOTER
+  ============================================================ -->
+  <footer>
+    <div class="footer-bottom">
+      <p>© 2025 VoidA2. All rights reserved.</p>
+      <div class="footer-socials">
+        <a href="https://discord.com/users/1167957676739792907" target="_blank" rel="noopener noreferrer">Discord</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <!-- ============================================================
+       JAVASCRIPT
+  ============================================================ -->
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+  /* ============================================================
+     PAGE LOADER
+  ============================================================ */
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      document.getElementById('loader').classList.add('hide');
+    }, 1600);
+  });
+
+
+  /* ============================================================
+     CUSTOM CURSOR
+  ============================================================ */
+  const cursorDot  = document.getElementById('cursor-dot');
+  const cursorRing = document.getElementById('cursor-ring');
+  let mouseX = 0, mouseY = 0;
+  let ringX  = 0, ringY  = 0;
+
+  document.addEventListener('mousemove', e => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    cursorDot.style.left  = mouseX + 'px';
+    cursorDot.style.top   = mouseY + 'px';
+  });
+
+  /* Smooth trailing cursor ring */
+  (function animateCursor() {
+    ringX += (mouseX - ringX) * 0.12;
+    ringY += (mouseY - ringY) * 0.12;
+    cursorRing.style.left = ringX + 'px';
+    cursorRing.style.top  = ringY + 'px';
+    requestAnimationFrame(animateCursor);
+  })();
+
+
+  /* ============================================================
+     SCROLL REVEAL — IntersectionObserver
+  ============================================================ */
+  const revealEls = document.querySelectorAll('.reveal');
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        /* also trigger philosophy underline */
+        if (entry.target.closest('#philosophy')) {
+          document.getElementById('philosophy').classList.add('visible');
+        }
+      }
+    });
+  }, { threshold: 0.12 });
+
+  revealEls.forEach(el => revealObserver.observe(el));
+
+
+  /* ============================================================
+     CANVAS SLIME SYSTEM
+     —
+     Renders organic black slime blobs that flow and drip around
+     the viewport. Uses metaball-style overlapping circles +
+     the SVG gooey filter applied via CSS on the canvas wrapper.
+
+     Technique:
+     - Pool of SlimeBlob objects with physics (gravity, viscosity)
+     - Blobs spawn near interactive elements or at top of viewport
+     - Canvas drawn each frame; CSS filter "goo" merges blobs
+  ============================================================ */
+  (function initSlime() {
+    const canvas  = document.getElementById('slime-canvas');
+    const ctx     = canvas.getContext('2d');
+
+    let W = window.innerWidth;
+    let H = window.innerHeight;
+
+    function resize() {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width  = W;
+      canvas.height = H;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    /* Apply the gooey SVG filter to canvas via CSS */
+    canvas.style.filter = 'url(#slime-drip)';
+
+    /* ---- Blob class ---- */
+    class SlimeBlob {
+      constructor(x, y, r, options = {}) {
+        this.x   = x;
+        this.y   = y;
+        this.r   = r;               // base radius
+        this.vx  = (Math.random() - 0.5) * (options.vx || 0.4);
+        this.vy  = Math.random() * (options.vy || 0.6) + 0.2; // falls down
+        this.life    = 0;
+        this.maxLife = options.maxLife || (200 + Math.random() * 200);
+        this.alpha   = 0;
+        this.phase   = Math.random() * Math.PI * 2;  // for wobble
+        this.wobble  = options.wobble || (0.3 + Math.random() * 0.4);
+        this.dead    = false;
+        /* drip tail: array of past positions */
+        this.trail = [];
+        this.trailLen = Math.floor(8 + Math.random() * 12);
+      }
+
+      update() {
+        this.life++;
+        /* Fade in then fade out */
+        if (this.life < 30) {
+          this.alpha = this.life / 30;
+        } else if (this.life > this.maxLife - 40) {
+          this.alpha = (this.maxLife - this.life) / 40;
+        } else {
+          this.alpha = 1;
+        }
+        if (this.life >= this.maxLife) this.dead = true;
+
+        /* Gravity + slight horizontal drift */
+        this.vy += 0.018;       // gravity
+        this.vx *= 0.988;       // friction
+        this.vy *= 0.992;
+
+        this.x += this.vx;
+        this.y += this.vy;
+
+        /* Store trail */
+        this.trail.push({ x: this.x, y: this.y });
+        if (this.trail.length > this.trailLen) this.trail.shift();
+
+        /* Kill if off-screen */
+        if (this.y - this.r > H + 60) this.dead = true;
+      }
+
+      draw(ctx) {
+        if (this.alpha <= 0) return;
+
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+
+        /* ---- Drip tail (elongated teardrop above blob) ---- */
+        if (this.trail.length >= 2) {
+          const oldest = this.trail[0];
+          // Draw a tapered path from tail tip to current blob center
+          const dx = this.x - oldest.x;
+          const dy = this.y - oldest.y;
+          const len = Math.sqrt(dx * dx + dy * dy) || 1;
+          const nx = -dy / len;   // normal
+          const ny =  dx / len;
+          const tailWidth = this.r * 0.45;
+
+          ctx.beginPath();
+          ctx.moveTo(oldest.x, oldest.y);  // tip of drip
+          ctx.bezierCurveTo(
+            oldest.x + nx * tailWidth * 0.3, oldest.y + ny * tailWidth * 0.3,
+            this.x   + nx * tailWidth,       this.y   + ny * tailWidth,
+            this.x, this.y
+          );
+          ctx.bezierCurveTo(
+            this.x   - nx * tailWidth,       this.y   - ny * tailWidth,
+            oldest.x - nx * tailWidth * 0.3, oldest.y - ny * tailWidth * 0.3,
+            oldest.x, oldest.y
+          );
+          ctx.closePath();
+
+          /* Fill drip tail */
+          const grad = ctx.createLinearGradient(oldest.x, oldest.y, this.x, this.y);
+          grad.addColorStop(0,   'rgba(255,255,255,0)');
+          grad.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+          grad.addColorStop(1,   'rgba(255,255,255,1)');
+          ctx.fillStyle = grad;
+          ctx.fill();
+        }
+
+        /* ---- Main blob circle ---- */
+        const wobbleR = this.r + Math.sin(this.life * 0.08 + this.phase) * this.wobble * 3;
+
+        /* Glossy radial gradient simulating a wet surface */
+        const blobGrad = ctx.createRadialGradient(
+          this.x - wobbleR * 0.28,   // highlight offset
+          this.y - wobbleR * 0.28,
+          wobbleR * 0.05,
+          this.x, this.y,
+          wobbleR
+        );
+        blobGrad.addColorStop(0,    'rgba(255,255,255,1)');
+        blobGrad.addColorStop(0.3,  'rgba(220,220,220,0.95)');
+        blobGrad.addColorStop(0.7,  'rgba(180,180,180,0.9)');
+        blobGrad.addColorStop(1,    'rgba(100,100,100,0.7)');
+
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, wobbleR, 0, Math.PI * 2);
+        ctx.fillStyle = blobGrad;
+        ctx.fill();
+
+        /* Specular highlight — tiny bright spot */
+        const spec = ctx.createRadialGradient(
+          this.x - wobbleR * 0.25,
+          this.y - wobbleR * 0.3,
+          0,
+          this.x - wobbleR * 0.2,
+          this.y - wobbleR * 0.2,
+          wobbleR * 0.4
+        );
+        spec.addColorStop(0,   'rgba(255,255,255,0.8)');
+        spec.addColorStop(1,   'rgba(255,255,255,0)');
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, wobbleR, 0, Math.PI * 2);
+        ctx.fillStyle = spec;
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    /* ---- Blob pool ---- */
+    let blobs = [];
+    let frame = 0;
+
+    /* Spawn a drip from a random top-edge position */
+    function spawnTopDrip() {
+      const x = Math.random() * W;
+      const r = 8 + Math.random() * 16;
+      blobs.push(new SlimeBlob(x, -r, r, {
+        vy: 0.5,
+        maxLife: 350 + Math.random() * 150,
+        wobble: 0.5
+      }));
+    }
+
+    /* Spawn blobs near mouse on movement */
+    let lastMX = 0, lastMY = 0;
+    document.addEventListener('mousemove', e => {
+      const dist = Math.hypot(e.clientX - lastMX, e.clientY - lastMY);
+      if (dist > 60 && Math.random() < 0.25) {
+        const r = 5 + Math.random() * 10;
+        blobs.push(new SlimeBlob(e.clientX, e.clientY, r, {
+          vx: (e.clientX - lastMX) * 0.04,
+          vy: Math.random() * 0.8,
+          maxLife: 180 + Math.random() * 120,
+          wobble: 0.4
+        }));
+      }
+      lastMX = e.clientX;
+      lastMY = e.clientY;
+    });
+
+    /* Spawn blobs on button/card click */
+    document.addEventListener('click', e => {
+      for (let i = 0; i < 5; i++) {
+        const r = 10 + Math.random() * 20;
+        blobs.push(new SlimeBlob(
+          e.clientX + (Math.random() - 0.5) * 40,
+          e.clientY + (Math.random() - 0.5) * 20,
+          r,
+          { vx: (Math.random() - 0.5) * 2, vy: Math.random() * 1.2, maxLife: 250 }
+        ));
+      }
+    });
+
+    /* Main render loop */
+    function render() {
+      frame++;
+      ctx.clearRect(0, 0, W, H);
+
+      /* Spawn top drips periodically */
+      if (frame % 90 === 0) spawnTopDrip();
+
+      /* Update & draw blobs */
+      blobs = blobs.filter(b => !b.dead);
+      blobs.forEach(b => { b.update(); b.draw(ctx); });
+
+      requestAnimationFrame(render);
+    }
+
+    /* Seed a few initial blobs */
+    for (let i = 0; i < 6; i++) {
+      setTimeout(spawnTopDrip, i * 400);
+    }
+
+    render();
+  })();
+
+
+  /* ============================================================
+     NAVBAR — hide/show on scroll direction
+  ============================================================ */
+  (function navScroll() {
+    let lastY = 0;
+    const nav = document.querySelector('nav');
+    window.addEventListener('scroll', () => {
+      const y = window.scrollY;
+      if (y < 100) {
+        nav.style.transform = 'translateY(0)';
+        return;
+      }
+      if (y > lastY) {
+        nav.style.transform = 'translateY(-100%)';
+        nav.style.transition = 'transform 0.4s ease';
+      } else {
+        nav.style.transform = 'translateY(0)';
+      }
+      lastY = y;
+    }, { passive: true });
+  })();
+
+
+  /* ============================================================
+     MAGNETIC BUTTONS — subtle hover pull effect
+  ============================================================ */
+  document.querySelectorAll('.btn-primary, .btn-secondary, .nav-cta').forEach(btn => {
+    btn.addEventListener('mousemove', e => {
+      const rect = btn.getBoundingClientRect();
+      const cx = rect.left + rect.width  / 2;
+      const cy = rect.top  + rect.height / 2;
+      const dx = (e.clientX - cx) * 0.25;
+      const dy = (e.clientY - cy) * 0.25;
+      btn.style.transform = `translate(${dx}px, ${dy}px) scale(1.04)`;
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.transform = '';
+    });
+  });
+
+
+  /* ============================================================
+     CARD PARALLAX — subtle tilt on hover
+  ============================================================ */
+  document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const rect = card.getBoundingClientRect();
+      const cx = rect.left + rect.width  / 2;
+      const cy = rect.top  + rect.height / 2;
+      const rx = ((e.clientY - cy) / rect.height) * 6;
+      const ry = ((e.clientX - cx) / rect.width)  * -6;
+      card.style.transform = `perspective(800px) rotateX(${rx}deg) rotateY(${ry}deg) scale(1.015)`;
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = 'perspective(800px) rotateX(0) rotateY(0) scale(1)';
+      card.style.transition = 'transform 0.5s ease';
+    });
+    card.addEventListener('mouseenter', () => {
+      card.style.transition = 'transform 0.1s ease';
+    });
+  });
+
+
+  /* ============================================================
+     SECTION PARALLAX — removed (hero section no longer present)
+  ============================================================ */
+
+
+  /* ============================================================
+     INPUT DETECTOR MODULE
+     Three sub-systems: Gamepad, Keyboard, Mouse
+     All polled/handled and rendered each rAF tick.
+  ============================================================ */
+  (function initInputDetector() {
+
+    /* ----------------------------------------------------------------
+       GAMEPAD sub-system
+       The Gamepad API is poll-based — we call navigator.getGamepads()
+       on every animation frame to get the latest button/axis state.
+    ---------------------------------------------------------------- */
+
+    /*
+      Standard gamepad button index mapping (Xbox/PS):
+        0=A  1=B  2=X  3=Y
+        4=LB 5=RB 6=LT 7=RT
+        8=Select 9=Start
+        10=L3 11=R3
+        12=DUp 13=DDown 14=DLeft 15=DRight
+    */
+
+    const gpButtonsGrid = document.getElementById('gp-buttons-grid');
+
+    // Store button elements by gamepad index for polling
+    const gpBtnEls = [];
+
+    function makeBtnEl(index, label, extraClass) {
+      const el = document.createElement('div');
+      el.className = `gp-btn ${extraClass}`;
+      el.textContent = label;
+      el.dataset.index = index;
+      gpBtnEls[index] = el;
+      return el;
+    }
+
+    function emptyCell(cls) {
+      const d = document.createElement('div');
+      d.className = cls || 'gp-face-empty';
+      return d;
+    }
+
+    /* ---- ROW 1: Shoulders — LT+LB stacked left, RT+RB stacked right ---- */
+    const shoulderRow = document.createElement('div');
+    shoulderRow.className = 'gp-btn-row';
+
+    const leftShoulder = document.createElement('div');
+    leftShoulder.className = 'gp-shoulder-group';
+    leftShoulder.appendChild(makeBtnEl(6, 'LT', 'trigger'));
+    leftShoulder.appendChild(makeBtnEl(4, 'LB', 'bumper'));
+
+    const rightShoulder = document.createElement('div');
+    rightShoulder.className = 'gp-shoulder-group';
+    rightShoulder.appendChild(makeBtnEl(7, 'RT', 'trigger'));
+    rightShoulder.appendChild(makeBtnEl(5, 'RB', 'bumper'));
+
+    shoulderRow.appendChild(leftShoulder);
+    const shSpacer = document.createElement('div'); shSpacer.className = 'gp-spacer';
+    shoulderRow.appendChild(shSpacer);
+    shoulderRow.appendChild(rightShoulder);
+
+    /* ---- ROW 2: Body — D-pad | Center cluster | Face diamond ---- */
+    const bodyRow = document.createElement('div');
+    bodyRow.className = 'gp-body-row';
+
+    // -- D-pad (3×3 grid, same 40px cells as face buttons) --
+    const dpad = document.createElement('div');
+    dpad.className = 'gp-dpad';
+    dpad.appendChild(emptyCell('gp-dpad-empty'));
+    dpad.appendChild(makeBtnEl(12, '▲', 'dpad'));
+    dpad.appendChild(emptyCell('gp-dpad-empty'));
+    dpad.appendChild(makeBtnEl(14, '◀', 'dpad'));
+    dpad.appendChild(emptyCell('gp-dpad-center'));
+    dpad.appendChild(makeBtnEl(15, '▶', 'dpad'));
+    dpad.appendChild(emptyCell('gp-dpad-empty'));
+    dpad.appendChild(makeBtnEl(13, '▼', 'dpad'));
+    dpad.appendChild(emptyCell('gp-dpad-empty'));
+
+    // -- Center cluster (SEL / STA / L3 / R3) --
+    const centerCluster = document.createElement('div');
+    centerCluster.className = 'gp-center-cluster';
+    const centerTop = document.createElement('div');
+    centerTop.className = 'gp-center-row';
+    centerTop.appendChild(makeBtnEl(8,  'SEL', 'small'));
+    centerTop.appendChild(makeBtnEl(9,  'STA', 'small'));
+    const centerBot = document.createElement('div');
+    centerBot.className = 'gp-center-row';
+    centerBot.appendChild(makeBtnEl(10, 'L3', 'stick-press'));
+    centerBot.appendChild(makeBtnEl(11, 'R3', 'stick-press'));
+    centerCluster.appendChild(centerTop);
+    centerCluster.appendChild(centerBot);
+
+    // -- Face buttons diamond (3×3 grid, same 40px cells as d-pad) --
+    const faceDiamond = document.createElement('div');
+    faceDiamond.className = 'gp-face-diamond';
+    faceDiamond.appendChild(emptyCell());
+    faceDiamond.appendChild(makeBtnEl(3, 'Y', 'face'));  // top center
+    faceDiamond.appendChild(emptyCell());
+    faceDiamond.appendChild(makeBtnEl(2, 'X', 'face'));  // middle left
+    faceDiamond.appendChild(emptyCell());
+    faceDiamond.appendChild(makeBtnEl(1, 'B', 'face'));  // middle right
+    faceDiamond.appendChild(emptyCell());
+    faceDiamond.appendChild(makeBtnEl(0, 'A', 'face'));  // bottom center
+    faceDiamond.appendChild(emptyCell());
+
+    bodyRow.appendChild(dpad);
+    bodyRow.appendChild(centerCluster);
+    bodyRow.appendChild(faceDiamond);
+
+    // Append both rows
+    gpButtonsGrid.appendChild(shoulderRow);
+    gpButtonsGrid.appendChild(bodyRow);
+
+    const gpStatusBadge = document.getElementById('gp-status-badge');
+    const gpStatusText  = document.getElementById('gp-status-text');
+    const gpNameEl      = document.getElementById('gp-name');
+    const gpDotLeft     = document.getElementById('gp-dot-left');
+    const gpDotRight    = document.getElementById('gp-dot-right');
+    const gpValsLeft    = document.getElementById('gp-vals-left');
+    const gpValsRight   = document.getElementById('gp-vals-right');
+
+    // Gamepad connect/disconnect events update the status badge
+    window.addEventListener('gamepadconnected', e => {
+      gpStatusBadge.classList.add('active');
+      gpStatusText.textContent = 'Connected';
+      gpNameEl.textContent = e.gamepad.id.substring(0, 60);
+    });
+    window.addEventListener('gamepaddisconnected', () => {
+      gpStatusBadge.classList.remove('active');
+      gpStatusText.textContent = 'Not Connected';
+      gpNameEl.textContent = 'No gamepad detected';
+      gpBtnEls.forEach(el => el.classList.remove('pressed'));
+    });
+
+    // Move a stick dot element based on normalised axis values (-1..1)
+    function updateStickDot(dotEl, ax, ay) {
+      const radius = 40; // max offset px within the 140px circle (was 30 for 80px)
+      dotEl.style.left = (50 + ax * radius) + '%';
+      dotEl.style.top  = (50 + ay * radius) + '%';
+    }
+
+    // Poll all connected gamepads — called every rAF tick
+    function pollGamepad() {
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let gp = null;
+      for (let i = 0; i < gamepads.length; i++) {
+        if (gamepads[i]) { gp = gamepads[i]; break; }
+      }
+      if (!gp) return;
+
+      // Sync button highlight states
+      gp.buttons.forEach((btn, i) => {
+        if (i >= gpBtnEls.length) return;
+        gpBtnEls[i].classList.toggle('pressed', btn.pressed);
+      });
+
+      // Left stick (axes 0, 1)
+      if (gp.axes.length >= 2) {
+        const lx = gp.axes[0], ly = gp.axes[1];
+        updateStickDot(gpDotLeft, lx, ly);
+        gpValsLeft.textContent = `X: ${lx.toFixed(2)} · Y: ${ly.toFixed(2)}`;
+      }
+
+      // Right stick (axes 2, 3)
+      if (gp.axes.length >= 4) {
+        const rx = gp.axes[2], ry = gp.axes[3];
+        updateStickDot(gpDotRight, rx, ry);
+        gpValsRight.textContent = `X: ${rx.toFixed(2)} · Y: ${ry.toFixed(2)}`;
+      }
+    }
+
+
+    /* ----------------------------------------------------------------
+       KEYBOARD sub-system
+       Event-driven — keydown adds to a Set, keyup removes.
+       Visuals updated synchronously in each handler.
+    ---------------------------------------------------------------- */
+
+    const kbLastKeyEl    = document.getElementById('kb-last-key');
+    const kbActiveKeysEl = document.getElementById('kb-active-keys');
+    const heldKeys       = new Set();
+
+    // Convert a KeyboardEvent to a short display name
+    function keyName(e) {
+      if (e.key === ' ') return 'SPACE';
+      if (e.key.length === 1) return e.key.toUpperCase();
+      return e.key
+        .replace('Arrow', '')
+        .replace('Control', 'CTRL')
+        .replace('Shift', 'SHIFT')
+        .replace('Alt', 'ALT')
+        .replace('Meta', 'META')
+        .replace('Backspace', 'BKSP')
+        .replace('Enter', 'ENTER')
+        .replace('Escape', 'ESC')
+        .replace('Tab', 'TAB')
+        .toUpperCase();
+    }
+
+    // Rebuild the currently-held key chips
+    function renderHeldKeys() {
+      kbActiveKeysEl.innerHTML = '';
+      heldKeys.forEach(k => {
+        const chip = document.createElement('span');
+        chip.className = 'kb-key-chip';
+        chip.textContent = k;
+        kbActiveKeysEl.appendChild(chip);
+      });
+    }
+
+    document.addEventListener('keydown', e => {
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) {
+        e.preventDefault();
+      }
+
+      const name = keyName(e);
+      heldKeys.add(name);
+      renderHeldKeys();
+
+      // Show last key + slime pulse animation
+      kbLastKeyEl.textContent = name;
+      kbLastKeyEl.classList.remove('pulse');
+      void kbLastKeyEl.offsetWidth; // reflow to restart CSS animation
+      kbLastKeyEl.classList.add('pulse');
+
+      // Trigger slime burst at the keyboard panel via a synthetic click
+      const panel = document.getElementById('panel-kb-mouse');
+      const rect  = panel.getBoundingClientRect();
+      for (let i = 0; i < 3; i++) {
+        document.dispatchEvent(new MouseEvent('click', {
+          clientX: rect.left + rect.width  * (0.2 + Math.random() * 0.6),
+          clientY: rect.top  + rect.height * (0.3 + Math.random() * 0.4),
+          bubbles: true, cancelable: true
+        }));
+      }
+    });
+
+    document.addEventListener('keyup', e => {
+      heldKeys.delete(keyName(e));
+      renderHeldKeys();
+    });
+
+
+    /* ----------------------------------------------------------------
+       MOUSE sub-system
+       mousemove for position + speed; mousedown/up for button states.
+    ---------------------------------------------------------------- */
+
+    const mouseXEl        = document.getElementById('mouse-x');
+    const mouseYEl        = document.getElementById('mouse-y');
+    const mouseLeftBtn    = document.getElementById('mouse-left-btn');
+    const mouseMiddleBtn  = document.getElementById('mouse-middle-btn');
+    const mouseRightBtn   = document.getElementById('mouse-right-btn');
+    const speedBar        = document.getElementById('mouse-speed-bar');
+    const clickPulseLeft  = document.getElementById('click-pulse-left');
+    const clickPulseRight = document.getElementById('click-pulse-right');
+
+    let mxRaw = 0, myRaw = 0, mxPrev = 0, myPrev = 0, mouseSpeed = 0;
+
+    // Track raw mouse position (the existing slime listener also reads this)
+    document.addEventListener('mousemove', e => {
+      mxRaw = e.clientX;
+      myRaw = e.clientY;
+    });
+
+    const btnState = { 0: false, 1: false, 2: false };
+
+    document.addEventListener('mousedown', e => {
+      btnState[e.button] = true;
+      syncBtnUI();
+      // Animated pulse dot on left/right click
+      if (e.button === 0) firePulse(clickPulseLeft);
+      if (e.button === 2) firePulse(clickPulseRight);
+    });
+    document.addEventListener('mouseup', e => {
+      btnState[e.button] = false;
+      syncBtnUI();
+    });
+
+    // Suppress right-click context menu inside the detector section only
+    document.getElementById('input-detector').addEventListener('contextmenu', e => {
+      e.preventDefault();
+    });
+
+    function firePulse(el) {
+      el.classList.remove('fire');
+      void el.offsetWidth;
+      el.classList.add('fire');
+    }
+
+    function syncBtnUI() {
+      mouseLeftBtn.classList.toggle('active',   btnState[0]);
+      mouseMiddleBtn.classList.toggle('active', btnState[1]);
+      mouseRightBtn.classList.toggle('active',  btnState[2]);
+    }
+
+    // Called every rAF — updates position labels and speed bar
+    function pollMouse() {
+      mouseXEl.textContent = mxRaw;
+      mouseYEl.textContent = myRaw;
+
+      // Compute pixel-per-frame speed and smooth it with a lerp
+      const dx = mxRaw - mxPrev;
+      const dy = myRaw - myPrev;
+      const raw = Math.sqrt(dx * dx + dy * dy);
+      mouseSpeed += (raw - mouseSpeed) * 0.2;
+
+      // Map 0–40 px/frame → 0–100% bar width
+      speedBar.style.width = Math.min(mouseSpeed / 40, 1) * 100 + '%';
+
+      mxPrev = mxRaw;
+      myPrev = myRaw;
+    }
+
+
+    /* ----------------------------------------------------------------
+       UNIFIED rAF LOOP — runs alongside the existing slime rAF loop.
+       Gamepad and mouse are polled here; keyboard is event-driven.
+    ---------------------------------------------------------------- */
+    function inputLoop() {
+      pollGamepad();
+      pollMouse();
+      requestAnimationFrame(inputLoop);
+    }
+    requestAnimationFrame(inputLoop);
+
+  })(); // end initInputDetector
+
+</script>
+</body>
+</html>
